@@ -1,0 +1,7 @@
+{
+  "name": "Outdoor Run Finder",
+  "description": "AI-powered running route generator with weather insights and route tracking.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
