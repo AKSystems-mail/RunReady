@@ -17,7 +17,7 @@ const RouteCard: React.FC<RouteCardProps> = ({ route, onSave, isSaved, onStartRu
     const shareData = {
       title: 'My Outdoor Run Route',
       text: `Check out this ${route.preferences.distance}${route.preferences.unit} run I found on Outdoor Run Finder: ${route.title}`,
-      url: window.location.href 
+      url: window.location.href
     };
 
     if (navigator.share) {
@@ -32,30 +32,30 @@ const RouteCard: React.FC<RouteCardProps> = ({ route, onSave, isSaved, onStartRu
     }
   };
 
-  // Construct map URL for driving directions preview style
+  // Construct map URL for Google Maps Embed API
   let mapUrl = "";
   let externalMapUrl = "";
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
   if (route.mapData) {
-    const saddr = encodeURIComponent(route.mapData.start);
-    let daddrParam = encodeURIComponent(route.mapData.end);
-    
-    // Add waypoints to daddr
+    const origin = encodeURIComponent(route.mapData.start);
+    const destination = encodeURIComponent(route.mapData.end);
+
+    let waypointsParam = "";
     if (route.mapData.waypoints && route.mapData.waypoints.length > 0) {
-        const intermediate = route.mapData.waypoints.map(w => encodeURIComponent(w)).join('+to:');
-        daddrParam = `${intermediate}+to:${encodeURIComponent(route.mapData.end)}`;
+      waypointsParam = `&waypoints=${route.mapData.waypoints.map(w => encodeURIComponent(w)).join('|')}`;
     }
 
-    mapUrl = `https://maps.google.com/maps?saddr=${saddr}&daddr=${daddrParam}&output=embed&t=m`;
-    externalMapUrl = `https://www.google.com/maps/dir/?api=1&origin=${saddr}&destination=${encodeURIComponent(route.mapData.end)}&travelmode=walking`;
-    if(route.mapData.waypoints.length > 0) {
-        externalMapUrl += `&waypoints=${route.mapData.waypoints.map(w => encodeURIComponent(w)).join('|')}`;
-    }
+    // Embed API format
+    mapUrl = `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${origin}&destination=${destination}${waypointsParam}&mode=walking`;
+
+    // External link format
+    externalMapUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=walking${waypointsParam}`;
 
   } else {
-    // Fallback if structured map data missing
+    // Fallback if structured map data missing - use Search mode
     const mapQuery = encodeURIComponent(`${route.title} ${route.preferences.customLocation || ''}`);
-    mapUrl = `https://maps.google.com/maps?q=${mapQuery}&t=&z=14&ie=UTF8&iwloc=&output=embed`;
+    mapUrl = `https://www.google.com/maps/embed/v1/search?key=${apiKey}&q=${mapQuery}`;
     externalMapUrl = `https://www.google.com/maps/search/?api=1&query=${mapQuery}`;
   }
 
@@ -72,14 +72,14 @@ const RouteCard: React.FC<RouteCardProps> = ({ route, onSave, isSaved, onStartRu
               <span className="bg-slate-700 text-slate-300 text-xs font-bold px-2 py-1 rounded-full uppercase tracking-wider">
                 {route.preferences.routeType === 'loop' ? 'Loop' : 'P2P'}
               </span>
-               <span className="bg-slate-700 text-slate-300 text-xs font-bold px-2 py-1 rounded-full uppercase tracking-wider">
+              <span className="bg-slate-700 text-slate-300 text-xs font-bold px-2 py-1 rounded-full uppercase tracking-wider">
                 {route.preferences.mode === 'local' ? 'Local' : 'Explorer'}
               </span>
             </div>
             <h2 className="text-2xl font-bold text-white">{route.title}</h2>
           </div>
           <div className="flex gap-2">
-            <button 
+            <button
               onClick={handleShare}
               className="p-2 bg-slate-800 hover:bg-slate-700 text-blue-400 rounded-full transition-colors"
               title="Share Route"
@@ -87,14 +87,13 @@ const RouteCard: React.FC<RouteCardProps> = ({ route, onSave, isSaved, onStartRu
               <Share2 size={20} />
             </button>
             {onSave && (
-              <button 
+              <button
                 onClick={() => onSave(route)}
                 disabled={isSaved}
-                className={`p-2 rounded-full transition-colors ${
-                  isSaved 
-                    ? 'bg-emerald-500/20 text-emerald-400 cursor-default' 
+                className={`p-2 rounded-full transition-colors ${isSaved
+                    ? 'bg-emerald-500/20 text-emerald-400 cursor-default'
                     : 'bg-slate-800 hover:bg-emerald-900/50 text-emerald-400'
-                }`}
+                  }`}
                 title="Save Route"
               >
                 <Save size={20} />
@@ -113,29 +112,29 @@ const RouteCard: React.FC<RouteCardProps> = ({ route, onSave, isSaved, onStartRu
 
         {/* Action Button: Start Run */}
         {onStartRun && (
-            <button 
-                onClick={() => onStartRun(route)}
-                className="w-full mb-6 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-900/40 transition-all transform active:scale-[0.98] flex justify-center items-center gap-2"
-            >
-                <PlayCircle size={24} fill="currentColor" className="text-emerald-200" /> 
-                START RUN
-            </button>
+          <button
+            onClick={() => onStartRun(route)}
+            className="w-full mb-6 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-900/40 transition-all transform active:scale-[0.98] flex justify-center items-center gap-2"
+          >
+            <PlayCircle size={24} fill="currentColor" className="text-emerald-200" />
+            START RUN
+          </button>
         )}
 
         {/* Turn by Turn Dropdown */}
         {route.directions && route.directions.length > 0 && (
           <div className="mb-6 border border-slate-700 rounded-xl overflow-hidden">
-            <button 
+            <button
               onClick={() => setShowDirections(!showDirections)}
               className="w-full bg-slate-800 p-4 flex justify-between items-center text-left hover:bg-slate-750 transition-colors"
             >
               <span className="text-slate-200 font-bold flex items-center gap-2">
-                <Navigation size={16} className="text-emerald-400" /> 
+                <Navigation size={16} className="text-emerald-400" />
                 Turn-by-Turn Directions
               </span>
               {showDirections ? <ChevronUp size={20} className="text-slate-400" /> : <ChevronDown size={20} className="text-slate-400" />}
             </button>
-            
+
             {showDirections && (
               <div className="bg-slate-800/50 p-4 border-t border-slate-700">
                 <ul className="space-y-3">
@@ -155,55 +154,55 @@ const RouteCard: React.FC<RouteCardProps> = ({ route, onSave, isSaved, onStartRu
 
         {/* Map View */}
         <div className="w-full h-64 bg-slate-800 rounded-xl overflow-hidden border border-slate-700 mb-6 relative">
-             <iframe 
-               width="100%" 
-               height="100%" 
-               frameBorder="0" 
-               scrolling="no" 
-               marginHeight={0} 
-               marginWidth={0} 
-               src={mapUrl}
-               title="Route Map"
-               className="filter grayscale-[20%] contrast-[1.1] opacity-90 hover:opacity-100 transition-opacity"
-             ></iframe>
-             <div className="absolute bottom-2 right-2">
-                <a 
-                    href={externalMapUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-white/90 text-slate-900 text-xs font-bold px-3 py-1.5 rounded-md shadow hover:bg-white flex items-center gap-1"
-                >
-                    <ExternalLink size={12} /> Open in Maps
-                </a>
-             </div>
+          <iframe
+            width="100%"
+            height="100%"
+            frameBorder="0"
+            scrolling="no"
+            marginHeight={0}
+            marginWidth={0}
+            src={mapUrl}
+            title="Route Map"
+            className="filter grayscale-[20%] contrast-[1.1] opacity-90 hover:opacity-100 transition-opacity"
+          ></iframe>
+          <div className="absolute bottom-2 right-2">
+            <a
+              href={externalMapUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-white/90 text-slate-900 text-xs font-bold px-3 py-1.5 rounded-md shadow hover:bg-white flex items-center gap-1"
+            >
+              <ExternalLink size={12} /> Open in Maps
+            </a>
+          </div>
         </div>
 
         <div className="pt-4 border-t border-slate-800 flex gap-4 justify-start items-center flex-wrap">
-            <span className="text-slate-500 text-xs font-bold uppercase mr-2">Sync with:</span>
-            <a 
-               href="https://www.strava.com/" 
-               target="_blank" 
-               rel="noreferrer"
-               className="text-orange-500 hover:text-orange-400 text-sm font-medium transition-colors"
-            >
-              Strava
-            </a>
-            <a 
-               href="https://runkeeper.com/" 
-               target="_blank" 
-               rel="noreferrer"
-               className="text-cyan-500 hover:text-cyan-400 text-sm font-medium transition-colors"
-            >
-              Runkeeper
-            </a>
-            <a 
-               href="https://www.google.com/fit/" 
-               target="_blank" 
-               rel="noreferrer"
-               className="text-blue-500 hover:text-blue-400 text-sm font-medium transition-colors"
-            >
-              Google Fit
-            </a>
+          <span className="text-slate-500 text-xs font-bold uppercase mr-2">Sync with:</span>
+          <a
+            href="https://www.strava.com/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-orange-500 hover:text-orange-400 text-sm font-medium transition-colors"
+          >
+            Strava
+          </a>
+          <a
+            href="https://runkeeper.com/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-cyan-500 hover:text-cyan-400 text-sm font-medium transition-colors"
+          >
+            Runkeeper
+          </a>
+          <a
+            href="https://www.google.com/fit/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-500 hover:text-blue-400 text-sm font-medium transition-colors"
+          >
+            Google Fit
+          </a>
         </div>
       </div>
     </div>

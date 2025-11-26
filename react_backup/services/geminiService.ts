@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { RoutePreferences, RouteData, WeatherInfo } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
 const SYSTEM_INSTRUCTION = `
 You are an expert running coach and route planner. Your goal is to find specific, real-world running routes for users based on their location and distance preferences using Google Maps data. 
@@ -17,14 +17,14 @@ When generating a route:
 `;
 
 export const generateRunRoute = async (
-  prefs: RoutePreferences, 
+  prefs: RoutePreferences,
   userLatLong?: { lat: number, lng: number }
 ): Promise<RouteData> => {
-  
-  const locationString = prefs.customLocation 
-    ? prefs.customLocation 
-    : userLatLong 
-      ? `${userLatLong.lat}, ${userLatLong.lng}` 
+
+  const locationString = prefs.customLocation
+    ? prefs.customLocation
+    : userLatLong
+      ? `${userLatLong.lat}, ${userLatLong.lng}`
       : "my current location";
 
   let modeInstruction = "";
@@ -83,14 +83,14 @@ export const generateRunRoute = async (
 
   let toolConfig = undefined;
   if (!prefs.customLocation && userLatLong) {
-      toolConfig = {
-        retrievalConfig: {
-            latLng: {
-                latitude: userLatLong.lat,
-                longitude: userLatLong.lng
-            }
+    toolConfig = {
+      retrievalConfig: {
+        latLng: {
+          latitude: userLatLong.lat,
+          longitude: userLatLong.lng
         }
-      };
+      }
+    };
   }
 
   try {
@@ -100,8 +100,8 @@ export const generateRunRoute = async (
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         tools: [
-            { googleMaps: {} }, 
-            { googleSearch: {} }
+          { googleMaps: {} },
+          { googleSearch: {} }
         ],
         toolConfig: toolConfig
       },
@@ -116,7 +116,7 @@ export const generateRunRoute = async (
     const directionsMatch = text.match(/## Directions\s+([\s\S]*?)(?=##|$)/);
     const weatherMatch = text.match(/## Weather\s+([\s\S]*?)(?=##|$)/);
     const mapDataMatch = text.match(/## MapData\s+([\s\S]*?)(?=##|$)/);
-    
+
     // Parse Directions list
     const directionsRaw = directionsMatch ? directionsMatch[1].trim() : "";
     const directions = directionsRaw
@@ -127,18 +127,18 @@ export const generateRunRoute = async (
     // Parse Map Data for Iframe Construction
     let mapData = undefined;
     if (mapDataMatch) {
-        const mapText = mapDataMatch[1];
-        const start = mapText.match(/Start: (.*)/i)?.[1]?.trim();
-        const end = mapText.match(/End: (.*)/i)?.[1]?.trim();
-        const waypointsStr = mapText.match(/Waypoints: (.*)/i)?.[1]?.trim();
-        
-        if (start && end) {
-            mapData = {
-                start,
-                end,
-                waypoints: waypointsStr ? waypointsStr.split('|').map(s => s.trim()).filter(s => s.length > 0) : []
-            };
-        }
+      const mapText = mapDataMatch[1];
+      const start = mapText.match(/Start: (.*)/i)?.[1]?.trim();
+      const end = mapText.match(/End: (.*)/i)?.[1]?.trim();
+      const waypointsStr = mapText.match(/Waypoints: (.*)/i)?.[1]?.trim();
+
+      if (start && end) {
+        mapData = {
+          start,
+          end,
+          waypoints: waypointsStr ? waypointsStr.split('|').map(s => s.trim()).filter(s => s.length > 0) : []
+        };
+      }
     }
 
     // Parse Weather details
@@ -154,11 +154,11 @@ export const generateRunRoute = async (
 
     // Extract grounding waypoints (keeping for fallback or references)
     const waypoints = chunks
-        .filter(c => c.maps && c.maps.title && c.maps.uri)
-        .map(c => ({
-            title: c.maps!.title!,
-            uri: c.maps!.uri!
-        }));
+      .filter(c => c.maps && c.maps.title && c.maps.uri)
+      .map(c => ({
+        title: c.maps!.title!,
+        uri: c.maps!.uri!
+      }));
 
     return {
       id: crypto.randomUUID(),
