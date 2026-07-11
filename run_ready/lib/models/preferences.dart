@@ -6,6 +6,7 @@ class RoutePreferences {
   final RouteType routeType;
   final RouteMode mode;
   final String? customLocation;
+  final double loopTightness;
 
   RoutePreferences({
     required this.distance,
@@ -13,6 +14,7 @@ class RoutePreferences {
     required this.routeType,
     required this.mode,
     this.customLocation,
+    this.loopTightness = 0.3,
   });
 
   Map<String, dynamic> toJson() => {
@@ -21,6 +23,7 @@ class RoutePreferences {
     'routeType': routeTypeToString(routeType),
     'mode': routeModeToString(mode),
     'customLocation': customLocation,
+    'loopTightness': loopTightness,
   };
 
   factory RoutePreferences.fromJson(Map<String, dynamic> json) => RoutePreferences(
@@ -29,5 +32,6 @@ class RoutePreferences {
     routeType: parseRouteType(json['routeType']),
     mode: parseRouteMode(json['mode']),
     customLocation: json['customLocation'],
+    loopTightness: (json['loopTightness'] as num?)?.toDouble() ?? 0.3,
   );
 }

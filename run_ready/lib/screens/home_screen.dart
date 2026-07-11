@@ -153,6 +153,7 @@ class HomeScreen extends ConsumerWidget {
                           routeType: prefs.routeType,
                           mode: prefs.mode,
                           customLocation: value,
+                                loopTightness: prefs.loopTightness,
                         ),
                       );
                     },
@@ -235,6 +236,7 @@ class HomeScreen extends ConsumerWidget {
                                               mode: prefs.mode,
                                               customLocation:
                                                   prefs.customLocation,
+                                              loopTightness: prefs.loopTightness,
                                             ),
                                           );
                                         }
@@ -282,6 +284,7 @@ class HomeScreen extends ConsumerWidget {
                                               mode: prefs.mode,
                                               customLocation:
                                                   prefs.customLocation,
+                                              loopTightness: prefs.loopTightness,
                                             ),
                                           );
                                         }
@@ -352,6 +355,7 @@ class HomeScreen extends ConsumerWidget {
                                           routeType: val,
                                           mode: prefs.mode,
                                           customLocation: prefs.customLocation,
+                                loopTightness: prefs.loopTightness,
                                         ),
                                       );
                                     }
@@ -394,6 +398,7 @@ class HomeScreen extends ConsumerWidget {
                                 routeType: prefs.routeType,
                                 mode: RouteMode.local,
                                 customLocation: prefs.customLocation,
+                                loopTightness: prefs.loopTightness,
                               ),
                             );
                           },
@@ -416,6 +421,7 @@ class HomeScreen extends ConsumerWidget {
                                 routeType: prefs.routeType,
                                 mode: RouteMode.explorer,
                                 customLocation: prefs.customLocation,
+                                loopTightness: prefs.loopTightness,
                               ),
                             );
                           },
@@ -426,6 +432,153 @@ class HomeScreen extends ConsumerWidget {
                   ),
 
                   const SizedBox(height: 24),
+
+                  // Loop Tightness Slider (only for Loop routes)
+                  if (prefs.routeType == RouteType.loop) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                LucideIcons.repeat,
+                                size: 16,
+                                color: Color(0xFF60A5FA),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Loop Tightness',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                prefs.loopTightness < 0.33
+                                    ? 'Tight (Multi-Lap)'
+                                    : prefs.loopTightness < 0.66
+                                        ? 'Moderate'
+                                        : 'Sprawling',
+                                style: TextStyle(
+                                  color: prefs.loopTightness < 0.33
+                                      ? const Color(0xFF34D399)
+                                      : prefs.loopTightness < 0.66
+                                          ? const Color(0xFFFBBF24)
+                                          : const Color(0xFF60A5FA),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          SliderTheme(
+                            data: SliderThemeData(
+                              activeTrackColor: const Color(0xFF34D399),
+                              inactiveTrackColor:
+                                  const Color(0xFF334155),
+                              thumbColor: const Color(0xFF34D399),
+                              overlayColor:
+                                  const Color(0x2934D399),
+                              trackHeight: 6,
+                              thumbShape:
+                                  const RoundSliderThumbShape(
+                                    enabledThumbRadius: 10,
+                                  ),
+                              overlayShape:
+                                  const RoundSliderOverlayShape(
+                                    overlayRadius: 20,
+                                  ),
+                            ),
+                            child: Slider(
+                              value: prefs.loopTightness,
+                              min: 0.0,
+                              max: 1.0,
+                              divisions: 20,
+                              onChanged: (val) {
+                                notifier.updatePreferences(
+                                  RoutePreferences(
+                                    distance: prefs.distance,
+                                    unit: prefs.unit,
+                                    routeType: prefs.routeType,
+                                    mode: prefs.mode,
+                                    customLocation:
+                                        prefs.customLocation,
+                                    loopTightness: val,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Tight\nMulti-lap',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.5),
+                                  fontSize: 10,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              Text(
+                                'Sprawling\nSingle lap',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.5),
+                                  fontSize: 10,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius:
+                                  BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  LucideIcons.info,
+                                  size: 14,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    prefs.loopTightness < 0.33
+                                        ? 'Compact loops around a few blocks. Multiple laps to hit the target distance.'
+                                        : prefs.loopTightness < 0.66
+                                            ? 'Moderate loops with some variation through the neighborhood.'
+                                            : 'Wide scenic loops exploring a larger area in a single lap.',
+                                    style: const TextStyle(
+                                      color: Color(0xFF94A3B8),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
 
                   SizedBox(
                     width: double.infinity,

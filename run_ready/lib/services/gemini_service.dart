@@ -15,6 +15,7 @@ class GeminiService {
           'gemini-3.5-flash', // Latest stable model as of July 2026
       apiKey: Env.geminiApiKey,
       systemInstruction: Content.system(_systemInstruction),
+      generationConfig: GenerationConfig(temperature: 0.5),
     );
   }
 
@@ -24,7 +25,7 @@ You also provide safety and weather advice.
 When generating a route:
 1. Use the googleMaps tool to find actual landmarks, streets, and paths.
 2. Use the googleSearch tool to check the current weather, sunrise, and sunset times for the location.
-3. If the user wants a "Loop", the start and end point should be the same or very close.
+3. If the user wants a "Loop", the start and end point should be the same or very close. Pay close attention to the LOOP TIGHTNESS instruction for how concentrated the route should be.
 4. If "Finish Line", the end point should be approximately the requested distance away.
 5. Provide a text description of the turn-by-turn directions.
 6. Assess if the weather is comfortable for running (Ideal: 5°C - 20°C / 40°F - 68°F). Warn if outside this range or if raining.
@@ -63,7 +64,14 @@ When generating a route:
     Plan a ${prefs.distance} ${distanceUnitToString(prefs.unit)} running route in $locationString.
     Route Type: ${routeTypeToString(prefs.routeType) == 'loop' ? 'Loop (start and end at same spot)' : 'Point-to-Point (Finish Line away from start)'}.
     $modeInstruction
-    
+
+    ${routeTypeToString(prefs.routeType) == 'loop' ? '''
+    LOOP TIGHTNESS: ${prefs.loopTightness < 0.33 ? 'TIGHT' : prefs.loopTightness < 0.66 ? 'MODERATE' : 'SPRAWLING'} (scale: 0.0-1.0, current: ${prefs.loopTightness.toStringAsFixed(2)}).
+    - TIGHT (0.0-0.32): The route must be very compact — circle a few blocks, a small park, or a short street. Hit the distance by doing MULTIPLE LAPS around this tight core. The route should feel like running around your own block a few times.
+    - MODERATE (0.33-0.65): A balanced loop through the neighborhood with some variation. May include 2 laps of a moderate loop.
+    - SPRAWLING (0.66-1.0): A wide scenic loop exploring a larger area in a single lap. No repeats, maximum variety.
+    ''' : ''}
+
     Tasks:
     1. Find a specific route using Google Maps.
     2. Check the current weather for this location right now. Include temp, conditions, and sunrise/sunset.
