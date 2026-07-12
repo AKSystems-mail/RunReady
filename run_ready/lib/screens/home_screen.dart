@@ -153,7 +153,6 @@ class HomeScreen extends ConsumerWidget {
                           routeType: prefs.routeType,
                           mode: prefs.mode,
                           customLocation: value,
-                                loopTightness: prefs.loopTightness,
                         ),
                       );
                     },
@@ -161,209 +160,221 @@ class HomeScreen extends ConsumerWidget {
 
                   const SizedBox(height: 16),
 
-                  Row(
+                  // Distance
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Distance
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Distance',
-                              style: TextStyle(
-                                color: Color(0xFF94A3B8),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
+                      const Text(
+                        'Distance',
+                        style: TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          // Decrement
+                          _buildDistanceButton(
+                            icon: LucideIcons.minus,
+                            onTap: () {
+                              final newDist = (prefs.distance - 0.5)
+                                  .clamp(0.5, 50.0);
+                              notifier.updatePreferences(
+                                RoutePreferences(
+                                  distance: newDist,
+                                  unit: prefs.unit,
+                                  routeType: prefs.routeType,
+                                  mode: prefs.mode,
+                                  customLocation: prefs.customLocation,
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          // Value display
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: const Color(0xFF334155),
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Container(
-                                    height: 48,
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF1E293B),
-                                      borderRadius: BorderRadius.horizontal(
-                                        left: Radius.circular(8),
-                                      ),
-                                      border: Border(
-                                        top: BorderSide(
-                                          color: Color(0xFF334155),
-                                        ),
-                                        bottom: BorderSide(
-                                          color: Color(0xFF334155),
-                                        ),
-                                        left: BorderSide(
-                                          color: Color(0xFF334155),
-                                        ),
-                                      ),
-                                    ),
-                                    child: TextField(
-                                      keyboardType:
-                                          const TextInputType.numberWithOptions(
-                                            decimal: true,
-                                          ),
+                            child: Text(
+                              '${prefs.distance.toStringAsFixed(prefs.distance == prefs.distance.roundToDouble() ? 0 : 1)} ${distanceUnitToString(prefs.unit)}',
+                              style: const TextStyle(
+                                color: Color(0xFF34D399),
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Increment
+                          _buildDistanceButton(
+                            icon: LucideIcons.plus,
+                            onTap: () {
+                              final newDist = (prefs.distance + 0.5)
+                                  .clamp(0.5, 50.0);
+                              notifier.updatePreferences(
+                                RoutePreferences(
+                                  distance: newDist,
+                                  unit: prefs.unit,
+                                  routeType: prefs.routeType,
+                                  mode: prefs.mode,
+                                  customLocation: prefs.customLocation,
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 12),
+                          // Unit dropdown
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF334155),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<DistanceUnit>(
+                                value: prefs.unit,
+                                dropdownColor: const Color(0xFF334155),
+                                icon: const Icon(
+                                  Icons.arrow_drop_down,
+                                  color: Colors.white,
+                                ),
+                                items: DistanceUnit.values.map((u) {
+                                  return DropdownMenuItem(
+                                    value: u,
+                                    child: Text(
+                                      distanceUnitToString(u),
                                       style: const TextStyle(
                                         color: Colors.white,
                                       ),
-                                      decoration: const InputDecoration(
-                                        border: InputBorder.none,
-                                        contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                        ),
-                                      ),
-                                      controller:
-                                          TextEditingController(
-                                              text: prefs.distance.toString(),
-                                            )
-                                            ..selection =
-                                                TextSelection.fromPosition(
-                                                  TextPosition(
-                                                    offset: prefs.distance
-                                                        .toString()
-                                                        .length,
-                                                  ),
-                                                ),
-                                      onChanged: (val) {
-                                        final d = double.tryParse(val);
-                                        if (d != null) {
-                                          notifier.updatePreferences(
-                                            RoutePreferences(
-                                              distance: d,
-                                              unit: prefs.unit,
-                                              routeType: prefs.routeType,
-                                              mode: prefs.mode,
-                                              customLocation:
-                                                  prefs.customLocation,
-                                              loopTightness: prefs.loopTightness,
-                                            ),
-                                          );
-                                        }
-                                      },
                                     ),
-                                  ),
-                                ),
-                                Container(
-                                  height: 48,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                  ),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF334155), // slate-700
-                                    borderRadius: BorderRadius.horizontal(
-                                      right: Radius.circular(8),
-                                    ),
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<DistanceUnit>(
-                                      value: prefs.unit,
-                                      dropdownColor: const Color(0xFF334155),
-                                      icon: const Icon(
-                                        Icons.arrow_drop_down,
-                                        color: Colors.white,
-                                      ),
-                                      items: DistanceUnit.values.map((u) {
-                                        return DropdownMenuItem(
-                                          value: u,
-                                          child: Text(
-                                            distanceUnitToString(u),
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        );
-                                      }).toList(),
-                                      onChanged: (val) {
-                                        if (val != null) {
-                                          notifier.updatePreferences(
-                                            RoutePreferences(
-                                              distance: prefs.distance,
-                                              unit: val,
-                                              routeType: prefs.routeType,
-                                              mode: prefs.mode,
-                                              customLocation:
-                                                  prefs.customLocation,
-                                              loopTightness: prefs.loopTightness,
-                                            ),
-                                          );
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      // Structure
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Structure',
-                              style: TextStyle(
-                                color: Color(0xFF94A3B8),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              height: 48,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1E293B),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: const Color(0xFF334155),
-                                ),
-                              ),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<RouteType>(
-                                  value: prefs.routeType,
-                                  dropdownColor: const Color(0xFF1E293B),
-                                  isExpanded: true,
-                                  icon: const Icon(
-                                    Icons.arrow_drop_down,
-                                    color: Colors.white,
-                                  ),
-                                  items: RouteType.values.map((t) {
-                                    return DropdownMenuItem(
-                                      value: t,
-                                      child: Text(
-                                        t == RouteType.loop
-                                            ? 'Loop'
-                                            : 'Point-to-Point',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                        ),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    notifier.updatePreferences(
+                                      RoutePreferences(
+                                        distance: prefs.distance,
+                                        unit: val,
+                                        routeType: prefs.routeType,
+                                        mode: prefs.mode,
+                                        customLocation:
+                                            prefs.customLocation,
                                       ),
                                     );
-                                  }).toList(),
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      notifier.updatePreferences(
-                                        RoutePreferences(
-                                          distance: prefs.distance,
-                                          unit: prefs.unit,
-                                          routeType: val,
-                                          mode: prefs.mode,
-                                          customLocation: prefs.customLocation,
-                                loopTightness: prefs.loopTightness,
-                                        ),
-                                      );
-                                    }
-                                  },
-                                ),
+                                  }
+                                },
                               ),
                             ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      // Slider
+                      SliderTheme(
+                        data: SliderThemeData(
+                          activeTrackColor: const Color(0xFF10B981),
+                          inactiveTrackColor: const Color(0xFF334155),
+                          thumbColor: const Color(0xFF34D399),
+                          overlayColor: const Color(0x1A10B981),
+                          trackHeight: 4,
+                          thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 10,
+                          ),
+                        ),
+                        child: Slider(
+                          value: prefs.distance.clamp(0.5, 50.0),
+                          min: 0.5,
+                          max: 50.0,
+                          divisions: 99,
+                          onChanged: (val) {
+                            notifier.updatePreferences(
+                              RoutePreferences(
+                                distance: val,
+                                unit: prefs.unit,
+                                routeType: prefs.routeType,
+                                mode: prefs.mode,
+                                customLocation: prefs.customLocation,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Structure
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Structure',
+                        style: TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        height: 48,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFF334155),
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<RouteType>(
+                            value: prefs.routeType,
+                            dropdownColor: const Color(0xFF1E293B),
+                            isExpanded: true,
+                            icon: const Icon(
+                              Icons.arrow_drop_down,
+                              color: Colors.white,
+                            ),
+                            items: RouteType.values.map((t) {
+                              return DropdownMenuItem(
+                                value: t,
+                                child: Text(
+                                  t == RouteType.loop
+                                      ? 'Loop'
+                                      : 'Point-to-Point',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                notifier.updatePreferences(
+                                  RoutePreferences(
+                                    distance: prefs.distance,
+                                    unit: prefs.unit,
+                                    routeType: val,
+                                    mode: prefs.mode,
+                                    customLocation: prefs.customLocation,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
                         ),
                       ),
                     ],
@@ -398,7 +409,6 @@ class HomeScreen extends ConsumerWidget {
                                 routeType: prefs.routeType,
                                 mode: RouteMode.local,
                                 customLocation: prefs.customLocation,
-                                loopTightness: prefs.loopTightness,
                               ),
                             );
                           },
@@ -421,7 +431,6 @@ class HomeScreen extends ConsumerWidget {
                                 routeType: prefs.routeType,
                                 mode: RouteMode.explorer,
                                 customLocation: prefs.customLocation,
-                                loopTightness: prefs.loopTightness,
                               ),
                             );
                           },
@@ -432,153 +441,6 @@ class HomeScreen extends ConsumerWidget {
                   ),
 
                   const SizedBox(height: 24),
-
-                  // Loop Tightness Slider (only for Loop routes)
-                  if (prefs.routeType == RouteType.loop) ...[
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF334155)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(
-                                LucideIcons.repeat,
-                                size: 16,
-                                color: Color(0xFF60A5FA),
-                              ),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'Loop Tightness',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const Spacer(),
-                              Text(
-                                prefs.loopTightness < 0.33
-                                    ? 'Tight (Multi-Lap)'
-                                    : prefs.loopTightness < 0.66
-                                        ? 'Moderate'
-                                        : 'Sprawling',
-                                style: TextStyle(
-                                  color: prefs.loopTightness < 0.33
-                                      ? const Color(0xFF34D399)
-                                      : prefs.loopTightness < 0.66
-                                          ? const Color(0xFFFBBF24)
-                                          : const Color(0xFF60A5FA),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          SliderTheme(
-                            data: SliderThemeData(
-                              activeTrackColor: const Color(0xFF34D399),
-                              inactiveTrackColor:
-                                  const Color(0xFF334155),
-                              thumbColor: const Color(0xFF34D399),
-                              overlayColor:
-                                  const Color(0x2934D399),
-                              trackHeight: 6,
-                              thumbShape:
-                                  const RoundSliderThumbShape(
-                                    enabledThumbRadius: 10,
-                                  ),
-                              overlayShape:
-                                  const RoundSliderOverlayShape(
-                                    overlayRadius: 20,
-                                  ),
-                            ),
-                            child: Slider(
-                              value: prefs.loopTightness,
-                              min: 0.0,
-                              max: 1.0,
-                              divisions: 20,
-                              onChanged: (val) {
-                                notifier.updatePreferences(
-                                  RoutePreferences(
-                                    distance: prefs.distance,
-                                    unit: prefs.unit,
-                                    routeType: prefs.routeType,
-                                    mode: prefs.mode,
-                                    customLocation:
-                                        prefs.customLocation,
-                                    loopTightness: val,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Tight\nMulti-lap',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.5),
-                                  fontSize: 10,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              Text(
-                                'Sprawling\nSingle lap',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.5),
-                                  fontSize: 10,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0F172A),
-                              borderRadius:
-                                  BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  LucideIcons.info,
-                                  size: 14,
-                                  color: Color(0xFF94A3B8),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    prefs.loopTightness < 0.33
-                                        ? 'Compact loops around a few blocks. Multiple laps to hit the target distance.'
-                                        : prefs.loopTightness < 0.66
-                                            ? 'Moderate loops with some variation through the neighborhood.'
-                                            : 'Wide scenic loops exploring a larger area in a single lap.',
-                                    style: const TextStyle(
-                                      color: Color(0xFF94A3B8),
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
 
                   SizedBox(
                     width: double.infinity,
@@ -703,6 +565,31 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDistanceButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E293B),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: const Color(0xFF334155),
+          ),
+        ),
+        child: Icon(
+          icon,
+          color: const Color(0xFF34D399),
+          size: 20,
         ),
       ),
     );

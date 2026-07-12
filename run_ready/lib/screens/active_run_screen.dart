@@ -5,7 +5,6 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import '../config/env.dart';
 import '../models/route_data.dart' as models;
 import '../models/run_session.dart';
 import '../providers/route_provider.dart';
@@ -44,19 +43,18 @@ class _ActiveRunScreenState extends ConsumerState<ActiveRunScreen> {
   }
 
   void _initMap() {
-    final apiKey = Env.googleMapsApiKey;
     String mapUrl;
-    if (widget.route.mapData != null) {
-      final saddr = Uri.encodeComponent(widget.route.mapData!.start);
-      final daddr = Uri.encodeComponent(widget.route.mapData!.end);
-      // Using embed API for consistency
+    if (widget.route.mapData != null && widget.route.mapData!.waypoints.isNotEmpty) {
+      final start = widget.route.mapData!.start.replaceAll(' ', '');
+      final end = widget.route.mapData!.end.replaceAll(' ', '');
+      final waypointStr = widget.route.mapData!.waypoints.map((w) => w.replaceAll(' ', '')).join('/');
       mapUrl =
-          "https://www.google.com/maps/embed/v1/directions?key=$apiKey&origin=$saddr&destination=$daddr&waypoints=${widget.route.mapData!.waypoints.join('|')}&mode=walking";
+          "https://www.openstreetmap.org/directions?engine=fossgis_osrm_foot&route=$start;$waypointStr;$end#map=15/$start";
     } else {
       final q = Uri.encodeComponent(
-        "${widget.route.title} ${widget.route.preferences.customLocation ?? ''}",
+        widget.route.preferences.customLocation ?? 'Atlanta, GA',
       );
-      mapUrl = "https://www.google.com/maps/embed/v1/search?key=$apiKey&q=$q";
+      mapUrl = "https://www.openstreetmap.org/search?query=$q#map=14";
     }
 
     _mapController = WebViewController()

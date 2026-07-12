@@ -5,23 +5,30 @@ class RouteMapData {
   final String start;
   final String end;
   final List<String> waypoints;
+  /// Dense OSRM road-following coordinates (set to waypoints as fallback)
+  final List<String> routeCoordinates;
 
   RouteMapData({
     required this.start,
     required this.end,
     required this.waypoints,
-  });
+    List<String>? routeCoordinates,
+  }) : routeCoordinates = routeCoordinates ?? waypoints;
 
   Map<String, dynamic> toJson() => {
     'start': start,
     'end': end,
     'waypoints': waypoints,
+    'routeCoordinates': routeCoordinates,
   };
 
   factory RouteMapData.fromJson(Map<String, dynamic> json) => RouteMapData(
     start: json['start'],
     end: json['end'],
     waypoints: List<String>.from(json['waypoints']),
+    routeCoordinates: json['routeCoordinates'] != null
+        ? List<String>.from(json['routeCoordinates'])
+        : null,
   );
 }
 

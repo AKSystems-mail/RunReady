@@ -132,6 +132,12 @@ class RouteNotifier extends Notifier<RouteState> {
         }
 
         position = await Geolocator.getCurrentPosition();
+        // Store GPS coordinates as customLocation so they persist
+        // and can be reused without re-acquiring GPS
+        final updatedPrefs = state.preferences.copyWith(
+          customLocation: '${position.latitude},${position.longitude}',
+        );
+        state = state.copyWith(preferences: updatedPrefs);
       }
 
       final route = await _geminiService.generateRunRoute(

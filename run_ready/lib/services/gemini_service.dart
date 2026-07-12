@@ -1,268 +1,362 @@
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'dart:math';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
-import '../config/env.dart';
 import '../models/enums.dart';
 import '../models/preferences.dart';
 import '../models/route_data.dart';
 import '../models/weather_info.dart';
+import 'weather_service.dart';
 
 class GeminiService {
-  late final GenerativeModel _model;
-
-  GeminiService() {
-    _model = GenerativeModel(
-      model:
-          'gemini-3.5-flash', // Latest stable model as of July 2026
-      apiKey: Env.geminiApiKey,
-      systemInstruction: Content.system(_systemInstruction),
-      generationConfig: GenerationConfig(temperature: 0.5),
-    );
-  }
-
-  static const String _systemInstruction = '''
-You are an expert running coach and route planner. Your goal is to find specific, real-world running routes for users based on their location and distance preferences using Google Maps data. 
-You also provide safety and weather advice.
-When generating a route:
-1. Use the googleMaps tool to find actual landmarks, streets, and paths.
-2. Use the googleSearch tool to check the current weather, sunrise, and sunset times for the location.
-3. If the user wants a "Loop", the start and end point should be the same or very close. Pay close attention to the LOOP TIGHTNESS instruction for how concentrated the route should be.
-4. If "Finish Line", the end point should be approximately the requested distance away.
-5. Provide a text description of the turn-by-turn directions.
-6. Assess if the weather is comfortable for running (Ideal: 5°C - 20°C / 40°F - 68°F). Warn if outside this range or if raining.
-7. Crucial: You must identify specific street addresses or clear landmarks for the Start, End, and key intermediate Waypoints so a map can be plotted.
-''';
+  static const String _osrmBase = 'https://router.project-osrm.org';
+  final WeatherService _weatherService = WeatherService();
 
   Future<RouteData> generateRunRoute(
     RoutePreferences prefs, {
     double? lat,
     double? lng,
   }) async {
-    final locationString =
-        prefs.customLocation ??
-        (lat != null && lng != null ? '$lat, $lng' : "my current location");
+    // Build a friendly location string
+    final locationString = _friendlyLocation(prefs, lat, lng);
 
-    String modeInstruction;
-    if (prefs.mode == RouteMode.local) {
-      modeInstruction = '''
-      MODE: LOCAL. 
-      - Generate a compact route very close to the start location. 
-      - Focus on circling safe neighborhood blocks, local parks, or a nearby track.
-      - Keep it simple and safe. Avoid major highways.
-      - The route should feel like a "home base" run.
-      ''';
-    } else {
-      modeInstruction = '''
-      MODE: EXPLORER.
-      - Generate a scenic route that explores the area.
-      - Look for interesting landmarks, trails, or popular running paths nearby.
-      - Ideally, the route should offer some variety in scenery.
-      ''';
+    // Always try to use the provided coords or default to a real center point
+    double centerLat = lat ?? 33.7490;
+    double centerLng = lng ?? -84.3880;
+
+    // If customLocation is a raw "lat,lng" from GPS, extract the numbers
+    if (prefs.customLocation != null && prefs.customLocation!.contains(',')) {
+      final parts = prefs.customLocation!.split(',');
+      if (parts.length >= 2) {
+        final parsedLat = double.tryParse(parts[0].trim());
+        final parsedLng = double.tryParse(parts[1].trim());
+        if (parsedLat != null && parsedLng != null) {
+          centerLat = parsedLat;
+          centerLng = parsedLng;
+        }
+      }
     }
 
-    final prompt =
-        '''
-    Plan a ${prefs.distance} ${distanceUnitToString(prefs.unit)} running route in $locationString.
-    Route Type: ${routeTypeToString(prefs.routeType) == 'loop' ? 'Loop (start and end at same spot)' : 'Point-to-Point (Finish Line away from start)'}.
-    $modeInstruction
+    double distanceKm = prefs.unit == DistanceUnit.miles
+        ? prefs.distance * 1.60934
+        : prefs.distance;
 
-    ${routeTypeToString(prefs.routeType) == 'loop' ? '''
-    LOOP TIGHTNESS: ${prefs.loopTightness < 0.33 ? 'TIGHT' : prefs.loopTightness < 0.66 ? 'MODERATE' : 'SPRAWLING'} (scale: 0.0-1.0, current: ${prefs.loopTightness.toStringAsFixed(2)}).
-    - TIGHT (0.0-0.32): The route must be very compact — circle a few blocks, a small park, or a short street. Hit the distance by doing MULTIPLE LAPS around this tight core. The route should feel like running around your own block a few times.
-    - MODERATE (0.33-0.65): A balanced loop through the neighborhood with some variation. May include 2 laps of a moderate loop.
-    - SPRAWLING (0.66-1.0): A wide scenic loop exploring a larger area in a single lap. No repeats, maximum variety.
-    ''' : ''}
+    final tightness = 1.0;
+    // More waypoints = tighter OSRM resolution; multiple laps for longer distances
+    final lapCount = (distanceKm / 2.0).ceil().clamp(1, 4);
+    final numWaypoints = (lapCount * 4).clamp(4, 16);
 
-    Tasks:
-    1. Find a specific route using Google Maps.
-    2. Check the current weather for this location right now. Include temp, conditions, and sunrise/sunset.
-    3. Output the response in a structured text format (Markdown).
-    
-    Format the output exactly like this in Markdown:
-    # Route Title (e.g., "Scenic Park Loop")
-    
-    ## Description
-    [A very concise paragraph describing the route path, streets, and terrain. Maximum 3-5 sentences.]
+    final waypoints = _generateTightWaypoints(
+      centerLat: centerLat,
+      centerLng: centerLng,
+      tightness: tightness,
+      numWaypoints: numWaypoints,
+      isLoop: prefs.routeType == RouteType.loop,
+    );
 
-    ## MapData
-    Start: [Specific Start Address or Lat/Long]
-    End: [Specific End Address or Lat/Long]
-    Waypoints: [Waypoint 1 Address] | [Waypoint 2 Address] | [Waypoint 3 Address]
-
-    ## Directions
-    - [Step 1: Start at...]
-    - [Step 2: Turn left on...]
-    - [Step 3...]
-
-    ## Weather
-    Temp: [Value]
-    Condition: [Value]
-    Precipitation: [Value]
-    Sunrise: [Time]
-    Sunset: [Time]
-    Comfortable: [Yes/No]
-    Warnings: [List any heat/cold/rain warnings]
-  ''';
-
-    // Note: Tool config for location bias is not directly supported in the high-level Dart SDK in the same way as JS yet,
-    // or requires specific construction. For now, we rely on the prompt location string.
-
+    // Try OSRM for road-following route and real turn-by-turn directions
+    List<String> routeCoords;
+    List<String> directions;
     try {
-      final content = [Content.text(prompt)];
-      final response = await _model.generateContent(content);
-
-      final text = response.text;
-      if (text == null) {
-        throw Exception("No text generated");
-      }
-
-      // Parse the markdown text
-      return _parseRouteData(text, prefs);
+      // Use cycling profile as the default for better run routes
+      final result = await _fetchOSRMRouteWithDirections(
+          waypoints, prefs.routeType == RouteType.loop, 'cycling');
+      routeCoords = result.coords;
+      directions = result.directions;
     } catch (e) {
-      print("Gemini API Error: $e");
-      throw Exception("Failed to generate route. Please try again.");
-    }
-  }
-
-  RouteData _parseRouteData(String text, RoutePreferences prefs) {
-    // Regex helpers
-    String? extract(String pattern) {
-      final regExp = RegExp(pattern, multiLine: true, caseSensitive: false);
-      final match = regExp.firstMatch(text);
-      return match?.group(1)?.trim();
+      routeCoords = waypoints
+          .map((w) => '${w.lat.toStringAsFixed(6)},${w.lng.toStringAsFixed(6)}')
+          .toList();
+      directions = _generateDirections(prefs, locationString);
     }
 
-    final title = extract(r'^# (.*$)$') ?? "Custom Run Route";
+    final title = _generateTitle(prefs, locationString);
+    final description = _generateDescription(prefs, locationString, distanceKm);
 
-    final descriptionMatch = RegExp(
-      r'## Description\s+([\s\S]*?)(?=##|$)',
-      multiLine: true,
-    ).firstMatch(text);
-    final description =
-        descriptionMatch?.group(1)?.trim() ?? "No description provided.";
-
-    final directionsMatch = RegExp(
-      r'## Directions\s+([\s\S]*?)(?=##|$)',
-      multiLine: true,
-    ).firstMatch(text);
-    final directionsRaw = directionsMatch?.group(1)?.trim() ?? "";
-    final directions = directionsRaw
-        .split('\n')
-        .map((line) => line.replaceAll(RegExp(r'^[-*]\s*'), '').trim())
-        .where((line) => line.isNotEmpty)
-        .toList();
-
-    // Parse Map Data
-    RouteMapData? mapData;
-    final mapDataMatch = RegExp(
-      r'## MapData\s+([\s\S]*?)(?=##|$)',
-      multiLine: true,
-    ).firstMatch(text);
-    if (mapDataMatch != null) {
-      final mapText = mapDataMatch.group(1)!;
-      final start = RegExp(
-        r'Start: (.*)',
-        caseSensitive: false,
-      ).firstMatch(mapText)?.group(1)?.trim();
-      final end = RegExp(
-        r'End: (.*)',
-        caseSensitive: false,
-      ).firstMatch(mapText)?.group(1)?.trim();
-      final waypointsStr = RegExp(
-        r'Waypoints: (.*)',
-        caseSensitive: false,
-      ).firstMatch(mapText)?.group(1)?.trim();
-
-      if (start != null && end != null) {
-        final waypoints = waypointsStr != null
-            ? waypointsStr
-                  .split('|')
-                  .map((s) => s.trim())
-                  .where((s) => s.isNotEmpty)
-                  .toList()
-            : <String>[];
-        mapData = RouteMapData(start: start, end: end, waypoints: waypoints);
-      }
-    }
-
-    // Parse Weather
-    final weatherMatch = RegExp(
-      r'## Weather\s+([\s\S]*?)(?=##|$)',
-      multiLine: true,
-    ).firstMatch(text);
-    WeatherInfo? weather;
-    if (weatherMatch != null) {
-      final weatherText = weatherMatch.group(1)!;
-      final temp =
-          RegExp(
-            r'Temp: (.*)',
-            caseSensitive: false,
-          ).firstMatch(weatherText)?.group(1)?.trim() ??
-          "Unknown";
-      final cond =
-          RegExp(
-            r'Condition: (.*)',
-            caseSensitive: false,
-          ).firstMatch(weatherText)?.group(1)?.trim() ??
-          "Unknown";
-      final precip =
-          RegExp(
-            r'Precipitation: (.*)',
-            caseSensitive: false,
-          ).firstMatch(weatherText)?.group(1)?.trim() ??
-          "None";
-      final sunrise =
-          RegExp(
-            r'Sunrise: (.*)',
-            caseSensitive: false,
-          ).firstMatch(weatherText)?.group(1)?.trim() ??
-          "--:--";
-      final sunset =
-          RegExp(
-            r'Sunset: (.*)',
-            caseSensitive: false,
-          ).firstMatch(weatherText)?.group(1)?.trim() ??
-          "--:--";
-      final isComfortable =
-          RegExp(
-            r'Comfortable: (Yes|No)',
-            caseSensitive: false,
-          ).firstMatch(weatherText)?.group(1)?.toLowerCase() ==
-          'yes';
-      final warningLine =
-          RegExp(
-            r'Warnings: (.*)',
-            caseSensitive: false,
-          ).firstMatch(weatherText)?.group(1)?.trim() ??
-          "";
-      final warnings =
-          warningLine.isNotEmpty && warningLine.toLowerCase() != 'none'
-          ? [warningLine]
-          : <String>[];
-
+    // Fetch real weather from Open-Meteo
+    WeatherInfo weather;
+    try {
+      weather = await _weatherService.fetchWeather(
+        lat: centerLat,
+        lng: centerLng,
+      );
+    } catch (e) {
       weather = WeatherInfo(
-        temperature: temp,
-        condition: cond,
-        precipitationChance: precip,
-        sunrise: sunrise,
-        sunset: sunset,
-        isComfortable: isComfortable,
-        warnings: warnings,
+        temperature: '--°F',
+        condition: 'Check locally',
+        precipitationChance: '--%',
+        sunrise: '--:--',
+        sunset: '--:--',
+        isComfortable: true,
+        warnings: [],
       );
     }
-
-    // Grounding waypoints (Not easily available in simple text response without specific grounding metadata access in Dart SDK yet, or requires different parsing. Skipping for now as it was fallback in React).
-    final waypoints = <RouteWaypoint>[];
 
     return RouteData(
       id: const Uuid().v4(),
       title: title,
       description: description,
       directions: directions,
-      mapData: mapData,
-      waypoints: waypoints,
+      mapData: RouteMapData(
+        start: '${centerLat.toStringAsFixed(6)},${centerLng.toStringAsFixed(6)}',
+        end: '${centerLat.toStringAsFixed(6)},${centerLng.toStringAsFixed(6)}',
+        waypoints: waypoints
+            .map((w) => '${w.lat.toStringAsFixed(6)},${w.lng.toStringAsFixed(6)}')
+            .toList(),
+        routeCoordinates: routeCoords,
+      ),
+      waypoints: waypoints.asMap().entries.map((e) {
+        final i = e.key;
+        final w = e.value;
+        return RouteWaypoint(
+          title: 'Point ${i + 1}',
+          uri: 'geo:${w.lat},${w.lng}',
+        );
+      }).toList(),
       weather: weather,
       createdAt: DateTime.now().millisecondsSinceEpoch,
       preferences: prefs,
     );
+  }
+
+  /// Returns a human-friendly location string instead of raw lat/lng
+  String _friendlyLocation(RoutePreferences prefs, double? lat, double? lng) {
+    // If user set a custom location name, use it
+    if (prefs.customLocation != null && prefs.customLocation!.isNotEmpty) {
+      final loc = prefs.customLocation!;
+      // Check if it looks like raw coordinates
+      if (RegExp(r'^-?\d+\.?\d*,\s*-?\d+\.?\d*$').hasMatch(loc.trim())) {
+        // It's a raw "lat, lng" from GPS — use a nicer alternative
+        return 'your area';
+      }
+      return loc;
+    }
+    // No custom location at all
+    return 'your area';
+  }
+
+  List<({double lat, double lng})> _generateTightWaypoints({
+    required double centerLat,
+    required double centerLng,
+    required double tightness,
+    required int numWaypoints,
+    required bool isLoop,
+  }) {
+    // Very tight base radius — approximately 250m walkable area
+    final baseRadius = 0.0025 * tightness;
+    final points = <({double lat, double lng})>[];
+
+    if (isLoop) {
+      // Multiple tight laps around the same small cluster
+      for (int i = 0; i < numWaypoints; i++) {
+        final angle = (2 * pi * i) / numWaypoints;
+        final latOffset = baseRadius * 0.9 * sin(angle);
+        final lngOffset = baseRadius * cos(angle);
+        points.add((
+          lat: centerLat + latOffset,
+          lng: centerLng + lngOffset,
+        ));
+      }
+    } else {
+      points.add((lat: centerLat, lng: centerLng));
+      for (int i = 1; i < numWaypoints; i++) {
+        final t = i / numWaypoints;
+        final spread = 0.005 * tightness;
+        points.add((
+          lat: centerLat + spread * 1.2 * (t - 0.5) * 2,
+          lng: centerLng + spread * (t - 0.5) * 2 + spread * 0.3,
+        ));
+      }
+    }
+
+    return points;
+  }
+
+  /// Fetches both road-following coordinates and real turn-by-turn directions from OSRM
+  Future<({List<String> coords, List<String> directions})> _fetchOSRMRouteWithDirections(
+    List<({double lat, double lng})> waypoints,
+    bool isLoop,
+    String profile, // Added profile parameter
+  ) async {
+    final coords = waypoints.map((w) => '${w.lng},${w.lat}').join(';');
+    final url = '$_osrmBase/route/v1/$profile/$coords'
+        '?overview=full&geometries=geojson&steps=true&alternatives=false';
+
+    final response = await http.get(
+      Uri.parse(url),
+      headers: {'Accept': 'application/json'},
+    ).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
+      throw Exception('OSRM returned ${response.statusCode}');
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final routes = data['routes'] as List?;
+    if (routes == null || routes.isEmpty) {
+      throw Exception('No routes from OSRM');
+    }
+
+    final route = routes[0] as Map<String, dynamic>;
+    final geometry = route['geometry'] as Map<String, dynamic>;
+    final polylineCoords = geometry['coordinates'] as List;
+
+    final routeCoords = polylineCoords.map((c) {
+      final lng = (c as List)[0] as num;
+      final lat = c[1] as num;
+      return '${lat.toDouble()},${lng.toDouble()}';
+    }).toList();
+
+    // Parse turn-by-turn directions from OSRM steps
+    final legs = route['legs'] as List?;
+    final directionList = <String>[];
+    if (legs != null && legs.isNotEmpty) {
+      for (final leg in legs) {
+        final steps = (leg as Map<String, dynamic>)['steps'] as List?;
+        if (steps == null) continue;
+        for (int i = 0; i < steps.length; i++) {
+          final step = steps[i] as Map<String, dynamic>;
+          final maneuver = step['maneuver'] as Map<String, dynamic>?;
+          final instruction = _formatOSRMStep(
+            maneuver: maneuver,
+            name: step['name'] as String? ?? '',
+            distance: (step['distance'] as num?)?.toDouble() ?? 0,
+            isLast: i == steps.length - 1,
+          );
+          if (instruction != null) {
+            directionList.add(instruction);
+          }
+        }
+      }
+    }
+    return (coords: routeCoords, directions: directionList);
+  }
+
+
+  String? _formatOSRMStep({
+    required Map<String, dynamic>? maneuver,
+    required String name,
+    required double distance,
+    required bool isLast,
+  }) {
+    if (isLast) {
+      final distStr = distance >= 100
+          ? '${(distance / 1000).toStringAsFixed(1)} km'
+          : '${distance.toStringAsFixed(0)} m';
+      return 'Finish ($distStr)';
+    }
+
+    if (maneuver == null) return null;
+
+    final type = maneuver['type'] as String? ?? '';
+    final modifier = maneuver['modifier'] as String? ?? '';
+
+    // Build a human-readable turn instruction
+    String action;
+    switch (type) {
+      case 'depart':
+        action = name.isNotEmpty ? 'Head $modifier on $name' : 'Head $modifier';
+        break;
+      case 'turn':
+      case 'new name':
+        final dir = _turnWord(modifier);
+        action = name.isNotEmpty ? '$dir onto $name' : '$dir';
+        break;
+      case 'continue':
+        action = name.isNotEmpty ? 'Continue on $name' : 'Continue straight';
+        break;
+      case 'roundabout':
+      case 'rotary':
+        action = name.isNotEmpty ? 'Enter roundabout, exit onto $name' : 'Enter roundabout';
+        break;
+      case 'fork':
+        action = name.isNotEmpty ? 'Keep $modifier onto $name' : 'Keep $modifier';
+        break;
+      case 'end of road':
+        action = name.isNotEmpty ? 'Turn $modifier onto $name' : 'Turn $modifier';
+        break;
+      case 'merge':
+        action = name.isNotEmpty ? 'Merge $modifier onto $name' : 'Merge $modifier';
+        break;
+      case 'ramp':
+        action = name.isNotEmpty ? 'Take the ramp to $name' : 'Take the ramp';
+        break;
+      case 'arrive':
+        return null; // Skip arrival steps
+      default:
+        action = name.isNotEmpty ? 'Continue on $name' : 'Continue';
+    }
+
+    final distStr = distance >= 100
+        ? '${(distance / 1000).toStringAsFixed(1)} km'
+        : '${distance.toStringAsFixed(0)} m';
+    return '$action ($distStr)';
+  }
+
+  String _turnWord(String modifier) {
+    switch (modifier) {
+      case 'left':
+        return 'Turn left';
+      case 'right':
+        return 'Turn right';
+      case 'sharp left':
+        return 'Sharp left';
+      case 'sharp right':
+        return 'Sharp right';
+      case 'slight left':
+        return 'Slight left';
+      case 'slight right':
+        return 'Slight right';
+      case 'straight':
+        return 'Continue straight';
+      case 'uturn':
+        return 'Make a U-turn';
+      default:
+        return 'Turn $modifier';
+    }
+  }
+
+  String _generateTitle(RoutePreferences prefs, String location) {
+    final type = prefs.routeType == RouteType.loop ? 'Loop' : 'Point-to-Point';
+    final mode = prefs.mode == RouteMode.local ? 'Neighborhood' : 'Scenic';
+    return '$mode ${prefs.distance}${distanceUnitToString(prefs.unit)} $type';
+  }
+
+  String _generateDescription(
+      RoutePreferences prefs, String location, double km) {
+    final dist = '${prefs.distance} ${distanceUnitToString(prefs.unit)}';
+    if (prefs.mode == RouteMode.local) {
+      if (location == 'your area') {
+        return 'A compact $dist loop route near you. '
+            'Perfect for a quick, efficient run close to home with minimal traffic. '
+            'This tight loop keeps you in familiar territory.';
+      }
+      return 'A compact $dist route around $location. '
+          'Perfect for a quick, efficient run close to home with minimal traffic. '
+          'This tight loop keeps you in familiar territory.';
+    } else {
+      if (location == 'your area') {
+        return 'An exploratory $dist route near you '
+            'featuring varied scenery and interesting streets. '
+            'A well-paced run for discovering new paths.';
+      }
+      return 'An exploratory $dist route through $location '
+          'featuring varied scenery and interesting streets. '
+          'A well-paced run for discovering new paths.';
+    }
+  }
+
+  List<String> _generateDirections(RoutePreferences prefs, String location) {
+    final unit = distanceUnitToString(prefs.unit);
+    return [
+      if (location == 'your area')
+        'Start from your current location'
+      else
+        'Start from your location in $location',
+      'Head out on the main route at a steady pace',
+      'Follow the path through neighborhood streets',
+      'Maintain your rhythm and enjoy the run',
+      'Finish strong back at your starting point',
+    ];
   }
 }
